@@ -1,0 +1,16 @@
+# R / RStudio
+.Rhistory
+.RData
+.Rproj.user/
+
+# Datos privados o de entrada que no deben publicarse
+*.xlsx
+data/confidencial/
+
+# Credenciales y variables de entorno
+config/credenciales.yml
+.Renviron
+
+# Resultados generados y regenerables
+res/*.html
+res/*.pdf
