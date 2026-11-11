@@ -1,0 +1,265 @@
+---
+
+---
+title: "Accidentes de tránsito con víctimas en Costa Rica"
+subtitle: "Patrones temporales, geográficos y de gravedad, 2020–2025"
+lang: es
+format:
+  html:
+    toc: true
+    number-sections: true
+    code-fold: true
+editor: visual
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+# Planteamiento
+
+Este proyecto describe los accidentes de tránsito con víctimas registrados en Costa Rica entre 2020 y 2025. Se estudia cómo varía la cantidad de registros y la proporción clasificada como **“Con muertos o graves”** según el año, el mes, el día de la semana, la hora, la provincia y el tipo de accidente.
+
+La pregunta de análisis es: **¿qué patrones temporales y geográficos aparecen en los accidentes registrados y cómo cambia la proporción de casos graves entre esos grupos?**
+
+## Objetivos
+
+1.  Describir la cantidad de accidentes registrados por periodo.
+2.  Comparar la proporción de casos clasificados como graves entre grupos de tiempo, provincia y tipo de accidente.
+3.  Revisar datos faltantes y filas duplicadas para documentar limitaciones de calidad.
+
+## Alcance y cautelas
+
+La unidad de análisis es cada fila del archivo. La base corresponde a accidentes **con víctimas**; no representa todos los accidentes de tránsito. La categoría “Con muertos o graves” se analiza tal como está registrada y no permite separar, por sí sola, personas fallecidas de personas gravemente heridas.
+
+Estos datos no incluyen medidas de exposición como cantidad de viajes, vehículos o kilómetros recorridos. Por ello, los conteos y porcentajes describen los registros disponibles: **no deben interpretarse como riesgo individual, tasas por población, ni evidencia de que una característica cause mayor gravedad**. La clasificación de gravedad también depende de la valoración consignada en el registro administrativo.
+
+# Preparación
+
+```{r}
+library(tidyverse)
+library(readxl)
+
+datos_accidentes <- read_excel("../data/datos accidentes.xlsx") %>%
+  mutate(
+    Día = str_remove(Día, "^\\d+\\.\\s*"),
+    Día = factor(Día, levels = c("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"), ordered = TRUE),
+    Mes = str_remove(Mes, "^[A-Z]\\.\\s*"),
+    Mes = factor(Mes, levels = c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"), ordered = TRUE),
+    `Tipo de accidente` = forcats::fct_relevel(`Tipo de accidente`, "Otros", after = Inf)
+  )
+```
+
+# Revisión de la base
+
+```{r}
+resumen_calidad <- tibble(
+  filas = nrow(datos_accidentes),
+  variables = ncol(datos_accidentes),
+  primer_año = min(datos_accidentes$Año, na.rm = TRUE),
+  último_año = max(datos_accidentes$Año, na.rm = TRUE),
+  filas_duplicadas_exactas = sum(duplicated(datos_accidentes)),
+  kilometro_faltante = if ("Kilómetro" %in% names(datos_accidentes)) sum(is.na(datos_accidentes$Kilómetro)) else NA_integer_
+)
+
+resumen_calidad
+```
+
+Las filas idénticas se reportan, pero no se eliminan automáticamente: la base no incluye un identificador único que permita confirmar si son errores o registros legítimos. Los valores faltantes de kilómetro tampoco se imputan, porque no son necesarios para las comparaciones principales de este informe.
+
+```{r}
+faltantes <- tibble(
+  variable = names(datos_accidentes),
+  faltantes = map_int(datos_accidentes, ~ sum(is.na(.x))),
+  porcentaje = round(100 * faltantes / nrow(datos_accidentes), 1)
+) %>%
+  filter(faltantes > 0) %>%
+  arrange(desc(faltantes))
+
+faltantes
+```
+
+# Resultados
+
+## Evolución anual
+
+```{r}
+accidentes_anuales <- datos_accidentes %>%
+  count(Año, name = "registros") %>%
+  left_join(
+    datos_accidentes %>%
+      group_by(Año) %>%
+      summarise(casos_graves = sum(`Clase de accidente` == "Con muertos o graves", na.rm = TRUE), .groups = "drop"),
+    by = "Año"
+  ) %>%
+  mutate(porcentaje_grave = 100 * casos_graves / registros)
+
+accidentes_anuales
+```
+
+```{r}
+ggplot(accidentes_anuales, aes(Año, registros)) +
+  geom_line(color = "#176B87", linewidth = 1) +
+  geom_point(color = "#176B87", size = 2.5) +
+  scale_x_continuous(breaks = sort(unique(accidentes_anuales$Año))) +
+  labs(title = "Accidentes con víctimas registrados por año", x = "Año", y = "Registros") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(accidentes_anuales, aes(Año, porcentaje_grave)) +
+  geom_line(color = "#B23A48", linewidth = 1) +
+  geom_point(color = "#B23A48", size = 2.5) +
+  scale_x_continuous(breaks = sort(unique(accidentes_anuales$Año))) +
+  labs(title = "Proporción anual clasificada como grave", x = "Año", y = "Casos graves (%)") +
+  theme_minimal()
+```
+
+El primer gráfico muestra el volumen de registros; el segundo permite comparar la proporción grave dentro de cada año. Son medidas distintas y conviene leerlas por separado.
+
+## Distribución por mes
+
+```{r}
+accidentes_mensuales <- datos_accidentes %>%
+  count(Mes, name = "registros")
+
+accidentes_mensuales
+
+ggplot(accidentes_mensuales, aes(Mes, registros)) +
+  geom_col(fill = "#F28E2B") +
+  labs(title = "Registros según mes", x = "Mes", y = "Registros") +
+  theme_minimal()
+```
+
+El total mensual combina varios años. Si el periodo contiene años incompletos, las comparaciones entre meses deben tomarse como descriptivas y no como patrones estacionales concluyentes.
+
+## Día de la semana
+
+```{r}
+accidentes_dia <- datos_accidentes %>%
+  group_by(Día) %>%
+  summarise(
+    registros = n(),
+    casos_graves = sum(`Clase de accidente` == "Con muertos o graves", na.rm = TRUE),
+    porcentaje_grave = 100 * casos_graves / registros,
+    .groups = "drop"
+  ) %>%
+  arrange(Día)
+
+accidentes_dia
+```
+
+```{r}
+ggplot(accidentes_dia, aes(Día, porcentaje_grave)) +
+  geom_col(fill = "#59A14F") +
+  labs(title = "Proporción grave por día de la semana", x = "Día", y = "Casos graves (%)") +
+  theme_minimal()
+```
+
+## Franja horaria
+
+```{r}
+accidentes_hora <- datos_accidentes %>%
+  mutate(
+    hora_num = suppressWarnings(as.integer(str_extract(as.character(`Hora recodificada`), "^\\d{1,2}"))),
+    franja = case_when(
+      hora_num >= 0 & hora_num < 6 ~ "00:00–05:59",
+      hora_num >= 6 & hora_num < 12 ~ "06:00–11:59",
+      hora_num >= 12 & hora_num < 18 ~ "12:00–17:59",
+      hora_num >= 18 & hora_num < 24 ~ "18:00–23:59",
+      TRUE ~ NA_character_
+    ),
+    franja = factor(franja, levels = c("00:00–05:59", "06:00–11:59", "12:00–17:59", "18:00–23:59"), ordered = TRUE)
+  )
+
+resumen_horario <- accidentes_hora %>%
+  filter(!is.na(franja)) %>%
+  group_by(franja) %>%
+  summarise(
+    registros = n(),
+    casos_graves = sum(`Clase de accidente` == "Con muertos o graves", na.rm = TRUE),
+    porcentaje_grave = 100 * casos_graves / registros,
+    .groups = "drop"
+  )
+
+resumen_horario
+```
+
+```{r}
+ggplot(resumen_horario, aes(franja, porcentaje_grave)) +
+  geom_col(fill = "#E15759") +
+  labs(title = "Proporción grave según franja horaria", x = "Franja", y = "Casos graves (%)") +
+  theme_minimal()
+```
+
+## Provincia
+
+```{r}
+resumen_provincia <- datos_accidentes %>%
+  group_by(Provincia) %>%
+  summarise(
+    registros = n(),
+    casos_graves = sum(`Clase de accidente` == "Con muertos o graves", na.rm = TRUE),
+    porcentaje_grave = 100 * casos_graves / registros,
+    .groups = "drop"
+  ) %>%
+  arrange(desc(porcentaje_grave))
+
+resumen_provincia
+```
+
+```{r}
+ggplot(resumen_provincia, aes(reorder(Provincia, porcentaje_grave), porcentaje_grave)) +
+  geom_col(fill = "#4E79A7") +
+  coord_flip() +
+  labs(title = "Proporción grave por provincia", x = "Provincia", y = "Casos graves (%)") +
+  theme_minimal()
+```
+
+El porcentaje se calcula dentro de los accidentes registrados en cada provincia. Una provincia puede tener una proporción mayor aunque otra acumule más casos en números absolutos.
+
+## Tipo de accidente
+
+```{r}
+resumen_tipo <- datos_accidentes %>%
+  group_by(`Tipo de accidente`) %>%
+  summarise(
+    registros = n(),
+    casos_graves = sum(`Clase de accidente` == "Con muertos o graves", na.rm = TRUE),
+    porcentaje_grave = 100 * casos_graves / registros,
+    .groups = "drop"
+  ) %>%
+  arrange(`Tipo de accidente` == "Otros", desc(porcentaje_grave)) %>%
+  mutate(`Tipo de accidente` = factor(as.character(`Tipo de accidente`), levels = as.character(`Tipo de accidente`)))
+
+resumen_tipo
+```
+
+La categoría “Otros” reúne varios tipos de accidente y se muestra al final.
+
+```{r}
+ggplot(resumen_tipo, aes(porcentaje_grave, forcats::fct_rev(`Tipo de accidente`))) +
+  geom_col(fill = "#B07AA1") +
+  labs(title = "Proporción grave por tipo de accidente", x = "Casos graves (%)", y = "Tipo de accidente") +
+  theme_minimal()
+```
+
+# Conclusiones preliminares
+
+```{r}
+provincia_mayor <- resumen_provincia %>% slice_max(porcentaje_grave, n = 1, with_ties = FALSE)
+franja_mayor <- resumen_horario %>% slice_max(porcentaje_grave, n = 1, with_ties = FALSE)
+```
+
+En esta descripción, la mayor proporción provincial aparece en **`r provincia_mayor$Provincia`** (`r round(provincia_mayor$porcentaje_grave, 1)`% de `r provincia_mayor$registros` registros). La mayor proporción entre las franjas horarias aparece en **`r franja_mayor$franja`** (`r round(franja_mayor$porcentaje_grave, 1)`% de `r franja_mayor$registros` registros). Estos resultados describen la base analizada; no permiten afirmar que esas ubicaciones u horarios sean causalmente más peligrosos, porque no se dispone de datos de exposición al tránsito.
+
+Para cerrar el análisis, conviene discutir también cómo cambian los conteos anuales, si las diferencias porcentuales se mantienen al considerar los tamaños de cada grupo y qué información adicional (por ejemplo, volumen de tránsito) permitiría estimar tasas comparables.
+
+# Datos
+
+La base es el conjunto de accidentes con víctimas de Costa Rica publicado por COSEVI. El Excel usado está en `data/` y forma parte de este repositorio.
+
+Fuente: [datos abiertos de COSEVI](https://datosabiertos.csv.go.cr/datasets/193472/consolidado-de-accidentes-de-transito-con-victimas/).
+
+
+
