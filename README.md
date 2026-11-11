@@ -1,23 +1,23 @@
-# Proyecto individual - Carta al estudiante
+# Proyecto individual: accidentes de tránsito en Costa Rica
 
-Proyecto individual del curso C0204 Herramientas de Ciencia de Datos I (2026). El análisis explora datos de accidentes de tránsito mediante R y Quarto.
+Este proyecto del curso C0204 Herramientas de Ciencia de Datos I describe los accidentes de tránsito con víctimas registrados en Costa Rica entre 2020 y 2025. El análisis compara los registros por año, mes, día, hora, provincia y tipo de accidente.
 
-## Estructura
+## Cómo generar el informe
 
-- `cod/`: documentos Quarto y código fuente, ordenados por ejecución.
-- `data/`: datos de entrada locales. Los archivos Excel se excluyen de Git según las indicaciones del curso.
-- `info/`: contexto, referencias y documentación del proyecto.
-- `config/`: parámetros de ejemplo; no guardar credenciales.
-- `res/`: resultados generados que pueden regenerarse.
+1. Abra proyecto-individual.Rproj en RStudio.
+2. Abra patrones_accidentes_transito_costa_rica.qmd dentro de cod.
+3. Pulse Render para generar el informe HTML.
 
-## Para abrir y ejecutar
+Se necesita R con los paquetes tidyverse y readxl, además de Quarto. La base de datos se encuentra en data. La descripción de su fuente, columnas y limitaciones está en info/fuentes_de_datos.md.
 
-1. Abrir `proyecto-individual.Rproj` en RStudio.
-2. Confirmar que el archivo de datos `datos accidentes.xlsx` esté dentro de `data/`.
-3. Abrir `cod/01_exploracion_accidentes.qmd` y renderizarlo con Quarto.
+## Carpetas
 
-El archivo Excel se conserva localmente y no se publica en este repositorio, conforme a la guía del curso. Si se clona el repositorio en otra computadora, colocar una copia autorizada del archivo dentro de `data/` antes de renderizar.
+- cod contiene el documento Quarto con el código y el análisis.
+- data contiene la base de accidentes.
+- info contiene la documentación sobre los datos y el proyecto.
+- config queda reservado para opciones de configuración si el análisis llega a necesitarlas.
+- res se reserva para el informe final, tablas o gráficos preparados para la entrega.
 
-## Historial de cambios
+## Fuente
 
-Los cambios se guardan en commits pequeños con mensajes `tipo: descripción` (por ejemplo, `feat: agrega gráfico por provincia`). Para trabajo nuevo, usar ramas como `feat/nuevo-grafico` y fusionarlas a `main`.
+Los datos provienen del Consolidado de accidentes de tránsito con víctimas publicado por el Consejo de Seguridad Vial (COSEVI).
